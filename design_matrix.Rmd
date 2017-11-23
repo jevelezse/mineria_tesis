@@ -1,0 +1,156 @@
+---
+title: "matriz de diseño"
+author: "Julián Cruz"
+date: "10 de noviembre de 2017"
+output: html_document
+---
+
+```{r}
+library("dplyr")
+library("magrittr")
+library("knitr")
+library("arules")
+
+```
+
+```{r}
+# carpeta <- "/media/julian/Dropbox/Dropbox/000_Backup/Proyectos/Jennifer Velez"
+carpeta <- "~/Escritorio/TablaBinaria"
+datos_csv <- "genes.csv"
+salida_csv <- "tabla_binaria.csv"
+
+```
+
+```{r}
+read.table(file.path(carpeta, datos_csv), header = TRUE, sep = ",") -> datos
+```
+
+```{r}
+names(datos)
+
+# data.frame(
+# (datos %>% lapply(unique) %>% lapply(length) %>% unlist),
+# (datos %>% lapply(class) %>% unlist)
+# ) %>% View
+
+c("id", "cromosoma", "gen", "pos_inicio", "pos_fin", "ref", "alt", "referencia_cambioAA", "homocigoto", "paciente_id", "funcion_gen_ref", "tipo_variante", "clinvar_sig") 
+
+c("id", "cromosoma", "gen", "homocigoto", "paciente_id", "funcion_gen_ref", "tipo_variante") %>% "["(datos, .) -> para_diseno_matriz
+
+
+
+```
+
+```{r}
+genera_metadata <- function(datos){
+datos %>% lapply(
+function(x){"if"(is.numeric(x), "numeric", as.character(unique(x)))}
+) %>% 
+#setNames(names(datos)) %>% 
+Map(data.frame, campo = names(datos), valores = ., clase = lapply(datos, class), stringsAsFactors = FALSE) %>%
+do.call(rbind, .) %>% 
+mutate(id = paste(campo, valores, sep = "_")) -> meta
+
+meta
+
+}
+
+matriz_diseno <- function(ddff, meta){
+  
+  lapply(meta$id, function(id){
+    "if"(
+      is.na("["(meta, meta$id == id, "valores")),
+      is.na("[["(ddff, "["(meta, meta$id == id, "campo"))),
+      "if"(
+        "["(meta, meta$id == id, "valores") == "numeric",
+        "[["(ddff, "["(meta, meta$id == id, "campo")),
+        "[["(ddff, "["(meta, meta$id == id, "campo")) == "["(meta, meta$id == id, "valores")
+        )
+      )
+    }
+  ) -> tmp
+  
+  lapply(tmp, as.numeric) -> tmp
+  
+  setNames(data.frame(tmp), meta$id)
+}  
+
+# meta <- metadata
+# ddff <- datos
+
+# matriz_diseno(iris, genera_metadata(iris))
+
+```
+
+## Reglas de asociación Gen contra Tipo de variante
+
+```{r gen_tipo_variante}
+# contar los genes y calcular el soporte de los genes
+datos %>% count(gen) %>% setNames(c("gen", "cuantos_gen")) %>% mutate(sop_x = cuantos_gen/nrow(datos)) -> df1 #se obtiene un dataframe
+
+# contar los otros y calcular el soporte de los otros
+# en este caso los otros son tipo_variante
+# para cambiar este código toca reemplazar tipo_variante por otro campo
+datos %>% count(tipo_variante)%>% setNames(c("tipo_variante", "cuantos_tipo_variante")) %>% mutate(sop_y = cuantos_tipo_variante/nrow(datos)) -> df2 #se obtiene un dataframe
+
+# cuenta el gen con respecto al otro campo
+# en este caso los otros son tipo_variante
+# para cambiar este código toca reemplazar tipo_variante por otro campo
+datos %>% count(gen, tipo_variante)%>% setNames(c("gen", "tipo_variante", "cuantos_gen_tipo_variante")) -> df3 #se obtiene un dataframe
+
+#este cdigo junta todos los dataframes mediante varios merges
+
+merge(df1, df3, by = "gen") %>% mutate(conf = (cuantos_gen_tipo_variante)/(cuantos_gen)) -> gen_tipo_variante #genera la tabla final
+write.csv(homo_tipo_gen,file = "asociacion1.csv")
+
+```
+
+```{r ,eval=FALSE}
+# contar los genes y calcular el soporte de los genes
+datos %>% count(gen) %>% setNames(c("gen", "cuantos_gen")) %>% mutate(sop_x = cuantos_gen/nrow(datos)) -> df1 #se obtiene un dataframe
+
+# contar los otros y calcular el soporte de los otros
+# en este caso los otros son tipo_variante
+# para cambiar este código toca reemplazar tipo_variante por otro campo
+datos %>% count(referencia_cambioAA)%>% setNames(c("referencia_cambioAA", "cuantos_referencia_cambioAA")) %>% mutate(sop_y = cuantos_referencia_cambioAA/nrow(datos)) -> df2 #se obtiene un dataframe
+
+# cuenta el gen con respecto al otro campo
+# en este caso los otros son tipo_variante
+# para cambiar este código toca reemplazar tipo_variante por otro campo
+datos %>% count(gen,referencia_cambioAA)%>% setNames(c("gen", "referencia_cambioAA", "cuantos_referencia_cambioAA")) -> df3 #se obtiene un dataframe
+
+#este cdigo junta todos los dataframes mediante varios merges
+
+merge(df1, df3, by = "gen") %>% mutate(conf = (cuantos_referencia_cambioAA)/(cuantos_gen)) -> gen_ref #genera la tabla final
+
+```
+
+## Reglas de asociación homocigoto y tipo contra gen
+
+```{r}
+#%>% mutate(sop_x = cuantos_gen/nrow(datos))
+datos %>% count(homocigoto, tipo_variante) %>% setNames(c("homocigoto", "tipo_variante", "cuantos_homo_tipo"))  -> df1
+
+datos %>% count(homocigoto, tipo_variante, gen) %>% setNames(c("homocigoto", "tipo_variante", "gen", "cuantos_homo_tipo_gen"))  -> df2
+
+merge(df1, df2) %>% mutate(conf = (cuantos_homo_tipo_gen)/(cuantos_homo_tipo)) %>% mutate(soporte_homo_tipo = cuantos_homo_tipo/nrow(datos)) -> homo_tipo_gen
+
+write.csv(homo_tipo_gen,file = "asociacion.csv")
+
+```
+
+
+```{r}
+
+matriz_diseno(para_diseno_matriz, genera_metadata(para_diseno_matriz)) %>% merge(datos[c("id", "gen")], ., by.x = "id", by.y = "id_numeric") %>% "<<-"(matriz_binaria, .) %>% write.table(file.path(carpeta, salida_csv), sep = ",", row.names = FALSE)
+
+
+```
+
+```{r}
+matriz_binaria %>% lapply(unique) %>% lapply(length)
+
+apriori()
+
+```
+
