@@ -1,3 +1,4 @@
+rm(list=ls())
 library("arules")
 library("arulesViz") #visualización
 library("visNetwork")
@@ -6,20 +7,25 @@ library("dplyr")
 library("tidyr")
 library("magrittr")
 library("stringr")
+
+par_clust <- "" 
+par_n <- 5
+par_tipo <- "confidence"
+
 genes <- read.csv('/home/jennifer/Escritorio/genesok.csv') 
 #genes$edad1 <- gsub(",","-",genes$edad1)#Cambio de coma
 #genes %<>% filter(cluster %in% c('c1','c5','c3','c4','c2'))
 #genes %<>% filter(cluster %in% c('c1','c3','c5'))
-genes %<>% filter(gen %in% c('DMD'))
+genes %<>% filter(gen %in% c("BRCA2","BRCA1","ATM"))
 
 #genes %<>% select(-cluster)
 
-genes <- sapply(genes,as.factor)
+#genes <- sapply(genes,as.factor)
 #genes$cluster <- discretize(genes$cluster)
 #genes$edad <- discretize(genes$edad)
 #genes$sexo <- discretize(genes$sexo)
 g <- as(genes, "transactions")
-rules <- apriori(g, parameter = list(supp = 0.1, conf = 0.6, target = "rules"))
+rules <- apriori(g, parameter = list(supp = 0.05, conf = 0.6, target = "rules"))
 rules <-sort(rules, by ="lift")
 #gato <- as(rules,"data.frame")
 gatos <- data.frame(lhs = labels(lhs(rules)), rhs = labels(rhs(rules)), rules@quality) 
@@ -75,11 +81,14 @@ visNetwork(
 ####### Codigo se Sergio########
 
 #Crear dataframe
-rules_test <- rules[1:5,]
+rules_test <- rules[,] # Filtro de reglas. 
+
 df_rules = data.frame(
   lhs = labels(lhs(rules_test)),
   rhs = labels(rhs(rules_test)), 
   rules_test@quality)
+
+df_rules %<>% filter(grepl(par_clust,lhs)|grepl(par_clust,rhs))%>% top_n(par_n,par_tipo)
 # Ajustar contenido de las celdas
 df_rules$regla <- rownames(df_rules)
 df_rules$lhs <- gsub("[\\{\\}]", "", df_rules$lhs)
@@ -128,6 +137,7 @@ nodes <- data.frame(id = dfnodos$edge, group = dfnodos$type, label = dfnodos$edg
 edges <- data.frame(from = df_reglas_gato$origen ,to=df_reglas_gato$destino)
 set.seed(1234)
 visNetwork(nodes, edges, width = "90%") %>% 
+  visOptions(highlightNearest = TRUE, nodesIdSelection = TRUE) %>%
   #visNodes(shape = "square") %>%                        # square for all nodes
   visEdges(arrows ="to") %>%                            # arrow "to" for all edges
   visGroups(groupname = "regla") %>%    # darkblue for group "A"
