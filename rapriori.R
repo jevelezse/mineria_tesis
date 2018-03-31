@@ -126,9 +126,10 @@ dfnodos <- dfn %>% group_by(edge,type) %>% summarise(n = n())
 
 nodes <- data.frame(id = dfnodos$edge, group = dfnodos$type, label = dfnodos$edge)
 edges <- data.frame(from = df_reglas_gato$origen ,to=df_reglas_gato$destino)
-
-visNetwork(nodes, edges, width = "100%") %>% 
-  visNodes(shape = "square") %>%                        # square for all nodes
+set.seed(1234)
+visNetwork(nodes, edges, width = "90%") %>% 
+  #visNodes(shape = "square") %>%                        # square for all nodes
   visEdges(arrows ="to") %>%                            # arrow "to" for all edges
-  visGroups(groupname = "regla", color = "darkblue") %>%    # darkblue for group "A"
-  visGroups(groupname = "Condicion", color = "red") 
+  visGroups(groupname = "regla") %>%    # darkblue for group "A"
+  visGroups(groupname = "Condicion",shape = "icon",icon = list(code = "f007", color = "pink"), color = "red") 
+
